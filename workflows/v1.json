@@ -1,0 +1,1300 @@
+{
+  "name": "Instagram AI Auto Reply Automation",
+  "nodes": [
+    {
+      "id": "ae284767-20da-4e87-ba63-ebdf343e5e66",
+      "name": "Meta Webhook - Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "instagram-comments",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "507d18d2-ca4b-41e7-9721-0c1edbea2b12",
+      "name": "Verify Token Match?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [280, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "8ff46a01-7a42-4e7e-87dd-433f1d3e6abe",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "={{ $env.META_VERIFY_TOKEN }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "905c983e-d3fd-4fed-bc61-0868a5408f74",
+      "name": "Respond - Challenge Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [520, 220],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "e52884d6-4783-41df-be54-6b349ee82e0f",
+      "name": "Respond - Verification Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [520, 400],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden - verify token mismatch",
+        "options": {
+          "responseCode": 403
+        }
+      }
+    },
+    {
+      "id": "64cb4308-7cdf-45e8-a5f7-84ed2c76898c",
+      "name": "Meta Webhook - Events (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-comments",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      }
+    },
+    {
+      "id": "b170f290-0537-42fe-a08a-ce5cdee9713a",
+      "name": "Verify Webhook Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 0],
+      "parameters": {
+        "jsCode": "// Meta signs the raw POST body with the app secret (X-Hub-Signature-256: sha256=<hex>).\n// Requires: webhook node option \"rawBody\" enabled, and NODE_FUNCTION_ALLOW_BUILTIN\n// including \"crypto\" on this n8n instance, or this node will throw on require().\nconst crypto = require('crypto');\n\nconst headers = $json.headers || {};\nconst signatureHeader = headers['x-hub-signature-256'] || headers['X-Hub-Signature-256'] || '';\nconst appSecret = $env.META_APP_SECRET || '';\n\nlet signatureValid = false;\n\nif (signatureHeader && appSecret && $binary && $binary.data) {\n  const rawBuffer = Buffer.from($binary.data.data, 'base64');\n  const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBuffer).digest('hex');\n  try {\n    signatureValid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signatureHeader));\n  } catch (e) {\n    signatureValid = false;\n  }\n} else if (!appSecret) {\n  // No app secret configured - fail closed rather than silently skipping verification.\n  signatureValid = false;\n}\n\nreturn [{\n  json: {\n    ...$json,\n    signatureValid\n  },\n  binary: $binary\n}];"
+      }
+    },
+    {
+      "id": "cf130f47-ab24-4674-b1b7-c285c1e2575c",
+      "name": "Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "6144edf3-97cd-444e-9374-b4cb1a44bc89",
+              "leftValue": "={{ $json.signatureValid }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5ced5792-b6da-4e5d-89fa-58b8a1b9f551",
+      "name": "Respond - Event Received",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [740, -100],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "EVENT_RECEIVED",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "2bc17b28-113a-4087-8cb3-c824a63b3b39",
+      "name": "Respond - Signature Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [740, 120],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Invalid signature",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    },
+    {
+      "id": "99a4785d-9081-4fff-bfa7-32f94ce4b4e2",
+      "name": "Reject - Invalid Signature",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [960, 120],
+      "parameters": {}
+    },
+    {
+      "id": "a3ad893b-ed94-4a27-b7aa-06326f38c93d",
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, -100],
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\nconst entry = (body.entry && body.entry[0]) || {};\nconst change = (entry.changes && entry.changes[0]) || {};\nconst value = change.value || {};\n\nif (!value || Object.keys(value).length === 0) {\n  throw new Error('No comment payload found in webhook body');\n}\n\nreturn [{ json: { raw: value } }];"
+      }
+    },
+    {
+      "id": "fb773a68-c52d-454f-b5ec-ffba61dd630e",
+      "name": "Normalize Comment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1180, -100],
+      "parameters": {
+        "jsCode": "const v = $input.first().json.raw;\n\nconst commentId = v.id || v.comment_id || '';\nconst mediaId = (v.media && v.media.id) || v.media_id || '';\nconst username = (v.from && v.from.username) || 'unknown';\nconst userId = (v.from && v.from.id) || '';\nconst commentText = v.text || '';\nconst commentTextLower = commentText.toLowerCase();\nconst timestamp = new Date().toISOString();\nconst startTime = Date.now();\n\nreturn [{\n  json: {\n    commentId,\n    mediaId,\n    username,\n    userId,\n    commentText,\n    commentTextLower,\n    timestamp,\n    startTime\n  }\n}];"
+      }
+    },
+    {
+      "id": "244bf9bb-a2e3-4e86-958d-310c2a176d3b",
+      "name": "Is Owner Comment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1400, -100],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "7e49276a-c23b-444c-bd1a-1ff523341005",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "={{ $env.INSTAGRAM_OWNER_ID }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "871629e9-61db-4720-b825-a58cb32648d7",
+      "name": "Ignore - Owner Comment",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1620, 20],
+      "parameters": {}
+    },
+    {
+      "id": "6ef09df8-12e8-4049-accc-dae7dd128c8e",
+      "name": "Duplicate Lookup",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1620, -220],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "ProcessedComments",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "commentId",
+              "lookupValue": "={{ $json.commentId }}"
+            }
+          ]
+        },
+        "options": {
+          "returnAllMatches": "firstMatch"
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "dc918282-a36c-41c7-8769-7d6ca6b47a47",
+      "name": "Evaluate Duplicate Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1840, -220],
+      "parameters": {
+        "jsCode": "// Duplicate Lookup uses the node's built-in filter (filtersUI) rather than reading\n// every row, so this only inspects the (0 or 1) matches it returned - not the whole sheet.\n// NOTE: Google Sheets API has no true server-side query language; \"filtersUI\" still\n// pulls the underlying range and filters it inside the node. Verify this against your\n// n8n version's actual Google Sheets node schema before relying on it at scale - if it\n// doesn't behave as documented, replace this node with a direct Sheets API values.get\n// call scoped to the commentId column, or move dedup to Postgres/Supabase (see note below).\nconst matches = $input.all();\nconst current = $('Normalize Comment Data').first().json;\n\nreturn [{\n  json: {\n    ...current,\n    isDuplicate: matches.length > 0\n  }\n}];"
+      }
+    },
+    {
+      "id": "f6de9c0d-083f-44db-b10d-0d8e37ec97d3",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2060, -220],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "7987de18-6bdf-4b21-8446-8204de573311",
+              "leftValue": "={{ $json.isDuplicate }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "19fd0800-82ba-403c-8bc4-8994a7a81235",
+      "name": "Ignore - Duplicate Comment",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2280, -340],
+      "parameters": {}
+    },
+    {
+      "id": "11e6672f-d267-432d-8fbc-20188e5455ca",
+      "name": "Store Comment ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2280, -120],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "ProcessedComments",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "commentId": "={{ $json.commentId }}",
+            "timestamp": "={{ $json.timestamp }}"
+          },
+          "matchingColumns": ["commentId"],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "4865ff49-4734-46c1-8812-faf21dd7b8e6",
+      "name": "Check Recent Reply History",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2500, -120],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "InteractionLog",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "username",
+              "lookupValue": "={{ $json.username }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "5abeab1f-1184-4c44-836c-a2e9bab62408",
+      "name": "Evaluate Cooldown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2720, -120],
+      "parameters": {
+        "jsCode": "// Configurable cooldown window; defaults to 60 minutes if the env var is unset/invalid.\nconst cooldownMinutes = Number($env.USER_REPLY_COOLDOWN_MINUTES) || 60;\nconst rows = $input.all().map(item => item.json);\nconst current = $('Store Comment ID').first().json;\n\nlet mostRecentReplyMs = 0;\nfor (const row of rows) {\n  if (!row.timestamp) continue;\n  const t = Date.parse(row.timestamp);\n  if (!isNaN(t) && t > mostRecentReplyMs) mostRecentReplyMs = t;\n}\n\nconst withinCooldown = mostRecentReplyMs > 0 &&\n  (Date.now() - mostRecentReplyMs) < (cooldownMinutes * 60 * 1000);\n\nreturn [{\n  json: {\n    ...current,\n    recentlyReplied: withinCooldown\n  }\n}];"
+      }
+    },
+    {
+      "id": "62fb0e75-b5b3-4d3c-bb5e-f4ced2aa82f8",
+      "name": "Recently Replied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2940, -120],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "635e5d50-657d-4f48-8a33-fcafd06b41ef",
+              "leftValue": "={{ $json.recentlyReplied }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "91edbbfa-eb3a-43bf-a3a8-5461bb073a1d",
+      "name": "Prepare Cooldown Skip Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3160, -260],
+      "parameters": {
+        "jsCode": "const upstream = $json;\nreturn [{\n  json: {\n    ...upstream,\n    aiReply: '',\n    status: 'skipped_reply_cooldown',\n    replySource: 'none',\n    aiModel: '',\n    aiSuccess: false,\n    executionTimeMs: Date.now() - (upstream.startTime || Date.now())\n  }\n}];"
+      }
+    },
+    {
+      "id": "f073f108-145d-4da9-9846-a885f9e61a73",
+      "name": "Deterministic Profanity Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3160, -120],
+      "parameters": {
+        "jsCode": "// Lightweight deterministic profanity check. Extend this list as needed; keep it out\n// of source control policy discussions - it's intentionally short/generic here.\nconst abusiveWords = [\n  'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'slut', 'whore', 'cunt'\n];\n\nconst text = $json.commentTextLower || '';\nconst isProfane = abusiveWords.some(word => text.includes(word));\n\nreturn [{\n  json: {\n    ...$json,\n    isProfane\n  }\n}];"
+      }
+    },
+    {
+      "id": "ff05f494-ad8c-4d23-bb7e-86e903f81f62",
+      "name": "Is Profane?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3380, -120],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "145433ec-d738-4185-9629-53593faf2eec",
+              "leftValue": "={{ $json.isProfane }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f053afb0-4654-4a28-a160-775d700e3d90",
+      "name": "Prepare Profanity Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3600, -260],
+      "parameters": {
+        "jsCode": "const upstream = $json;\nreturn [{\n  json: {\n    ...upstream,\n    aiReply: '',\n    status: 'ignored_profanity',\n    replySource: 'none',\n    aiModel: '',\n    aiSuccess: false,\n    executionTimeMs: Date.now() - (upstream.startTime || Date.now())\n  }\n}];"
+      }
+    },
+    {
+      "id": "136d7bfe-3464-41a7-9240-fc579c178bc5",
+      "name": "Deterministic Spam Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3600, -120],
+      "parameters": {
+        "jsCode": "const text = $json.commentTextLower || '';\n\nconst spamPatterns = [\n  /crypto/, /forex/, /casino/, /investment/, /invest now/,\n  /t\\.me\\//, /telegram/, /whatsapp/, /\\+?\\d[\\d\\s\\-]{7,}\\d/, // phone-like numbers\n  /discount code/, /limited offer/, /click the link/,\n  /https?:\\/\\//, /www\\./\n];\n\nconst isSpam = spamPatterns.some(pattern => pattern.test(text));\n\nreturn [{\n  json: {\n    ...$json,\n    isSpam\n  }\n}];"
+      }
+    },
+    {
+      "id": "b6cb7d31-7071-4cd5-84be-924143871a14",
+      "name": "Is Spam?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3820, -120],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "974f4a41-888b-47d5-9f97-8246f65dec45",
+              "leftValue": "={{ $json.isSpam }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "96f4d417-ec62-4cf8-8d0d-9c008edeaacd",
+      "name": "Prepare Spam Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4040, -260],
+      "parameters": {
+        "jsCode": "const upstream = $json;\nreturn [{\n  json: {\n    ...upstream,\n    aiReply: '',\n    status: 'ignored_spam',\n    replySource: 'none',\n    aiModel: '',\n    aiSuccess: false,\n    executionTimeMs: Date.now() - (upstream.startTime || Date.now())\n  }\n}];"
+      }
+    },
+    {
+      "id": "fe683102-67bd-4e10-a3e7-0385095cd19b",
+      "name": "Deterministic Keyword Detector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4040, -120],
+      "parameters": {
+        "jsCode": "const KEYWORDS = [\n  'pdf', 'guide', 'ebook', 'resource', 'course', 'price', 'pricing',\n  'details', 'link', 'dm', 'buy', 'template', 'checklist'\n];\n\nconst text = $json.commentTextLower || '';\nconst matched = KEYWORDS.find(word => text.includes(word)) || null;\n\nreturn [{\n  json: {\n    ...$json,\n    keywordMatch: matched,\n    isKeywordMatch: matched !== null\n  }\n}];"
+      }
+    },
+    {
+      "id": "f761d7ae-016b-43ec-ae51-3d260d0e96c0",
+      "name": "Is Keyword Match?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [4260, -120],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "45e40af0-0520-41d2-b73e-74e9d4d73a57",
+              "leftValue": "={{ $json.isKeywordMatch }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "14ae9d10-fa8a-42f5-91d1-4a2e252fdeb7",
+      "name": "Build Keyword Reply + DM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4480, -260],
+      "parameters": {
+        "jsCode": "// Deterministic DM copy - varied slightly by keyword so it doesn't read as a bot template.\n// No OpenRouter call here by design (cost optimization: only ambiguous comments reach AI).\nconst leadMagnetUrl = $env.LEAD_MAGNET_URL || '';\nconst keyword = $json.keywordMatch || 'that';\n\nconst templates = [\n  `Hey! Here's the ${keyword} you asked about: ${leadMagnetUrl}`,\n  `Got you - here's the link: ${leadMagnetUrl}`,\n  `Sending it over now: ${leadMagnetUrl}`\n];\n\nconst dmMessage = templates[Math.floor(Math.random() * templates.length)];\n\nreturn [{\n  json: {\n    ...$json,\n    aiReply: 'Thanks! Check your DMs \\ud83d\\ude0a',\n    dmMessage,\n    replySource: 'keyword',\n    aiModel: '',\n    aiSuccess: false\n  }\n}];"
+      }
+    },
+    {
+      "id": "0eeaeac7-e49f-494d-a53e-cf5e1e01e55b",
+      "name": "Send Instagram DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4700, -260],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.GRAPH_API_VERSION }}/{{ $json.userId }}/messages",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $env.INSTAGRAM_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ recipient: { id: $json.userId }, message: { text: $json.dmMessage } }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "4c163316-36fb-44f3-ba3f-9e3c5688874e",
+      "name": "Classify Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4480, -120],
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENROUTER_API_KEY }}"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "http://localhost"
+            },
+            {
+              "name": "X-Title",
+              "value": "Instagram AI Automation"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.OPENROUTER_MODEL || \"openai/gpt-oss-20b:free\", messages: [ { role: \"system\", content: `You are a strict JSON-only classifier for Instagram comments. Read the comment and respond with ONLY one JSON object, no prose, no markdown, no code fences. Choose exactly one of these shapes: {\\\"type\\\":\\\"positive\\\"} , {\\\"type\\\":\\\"negative\\\"} , {\\\"type\\\":\\\"question\\\"} , {\\\"type\\\":\\\"unknown\\\"} . Keyword requests and spam are already filtered out before this step, so never return \\\"keyword\\\" or \\\"spam\\\". Return nothing except the JSON object.` }, { role: \"user\", content: $json.commentText } ], temperature: 0.2 }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "f4047cc2-c097-4a4b-af82-34b33b7c9437",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4700, -120],
+      "parameters": {
+        "jsCode": "const upstream = $('Deterministic Keyword Detector').first().json;\nlet classification = { type: 'unknown' };\nconst hadError = $json.error !== undefined;\n\nif (!hadError) {\n  try {\n    const content = $json.choices[0].message.content;\n    const cleaned = String(content).trim().replace(/^```json/i, '').replace(/```$/, '').trim();\n    const parsed = JSON.parse(cleaned);\n    if (parsed && typeof parsed.type === 'string') {\n      classification = parsed;\n    }\n  } catch (e) {\n    classification = { type: 'unknown' };\n  }\n}\n\nreturn [{\n  json: {\n    ...upstream,\n    classification,\n    classifyCallFailed: hadError\n  }\n}];"
+      }
+    },
+    {
+      "id": "ffd1c9ff-651a-4899-91cb-e4623713eaf2",
+      "name": "Build Reply Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4920, -120],
+      "parameters": {
+        "jsCode": "// One reusable prompt builder feeds a single shared \"Generate AI Reply\" HTTP node,\n// instead of duplicating the HTTP config four times. Rewritten to sound like a real\n// creator, not a support bot: max one emoji, no hashtags, no quotation marks, no\n// \"as an AI\" language, no corporate tone.\nconst type = ($json.classification && $json.classification.type) || 'unknown';\n\nconst PROMPTS = {\n  positive: \"Someone left a nice comment on your Instagram post. Reply like you're genuinely happy about it - casual, warm, like a real person typing fast, not a brand account. One sentence, max 20 words. At most one emoji. No hashtags, no quotation marks around the reply.\",\n  negative: \"Someone left a critical or negative comment on your Instagram post. Reply calmly and respectfully, acknowledge their point, apologize briefly if it fits. Max 25 words. At most one emoji, and only if it genuinely fits - it's fine to use none. No hashtags, no quotation marks, no corporate language.\",\n  question: \"Someone asked a question in the comments on your Instagram post. Answer it directly and helpfully like you actually know the answer, in your own casual voice. Max 25 words. At most one emoji. No hashtags, no quotation marks.\",\n  unknown: \"Someone left a comment on your Instagram post that doesn't clearly fall into a category. Write a short, friendly, natural reply acknowledging it. Max 20 words. At most one emoji. No hashtags, no quotation marks, no generic corporate language.\"\n};\n\nconst systemPrompt = PROMPTS[type] || PROMPTS.unknown;\n\nreturn [{\n  json: {\n    ...$json,\n    systemPrompt\n  }\n}];"
+      }
+    },
+    {
+      "id": "e4787bb0-69b0-446d-adc4-a818f0435614",
+      "name": "Generate AI Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5140, -120],
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENROUTER_API_KEY }}"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "http://localhost"
+            },
+            {
+              "name": "X-Title",
+              "value": "Instagram AI Automation"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.OPENROUTER_MODEL || \"openai/gpt-oss-20b:free\", messages: [ { role: \"system\", content: $json.systemPrompt }, { role: \"user\", content: $json.commentText } ], temperature: 0.8 }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "eba6f3b0-8cee-419e-b6df-e4c2942b71ac",
+      "name": "Parse AI Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5360, -120],
+      "parameters": {
+        "jsCode": "const fallback = 'Thanks for your comment! \\ud83d\\ude0a';\nlet aiReply = fallback;\nlet aiSuccess = true;\nlet replySource = 'ai';\n\nconst hadError = $json.error !== undefined;\nconst upstream = $('Build Reply Prompt').first().json;\nconst modelUsed = $env.OPENROUTER_MODEL || 'openai/gpt-oss-20b:free';\n\nif (hadError) {\n  aiSuccess = false;\n  replySource = 'fallback';\n} else {\n  try {\n    const content = $json.choices[0].message.content;\n    aiReply = String(content).trim().replace(/^\"|\"$/g, '');\n    if (!aiReply) {\n      aiReply = fallback;\n      aiSuccess = false;\n      replySource = 'fallback';\n    }\n  } catch (e) {\n    aiReply = fallback;\n    aiSuccess = false;\n    replySource = 'fallback';\n  }\n}\n\nreturn [{\n  json: {\n    ...upstream,\n    aiReply,\n    aiSuccess,\n    replySource,\n    aiModel: modelUsed\n  }\n}];"
+      }
+    },
+    {
+      "id": "e90ad926-4c18-401c-aeef-296c66e1924c",
+      "name": "Wait - Throttle Reply",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [5580, -120],
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "a9df9894-dbb2-4ed3-bea8-9b816d6d7374",
+      "name": "Reply Publicly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5800, -120],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.GRAPH_API_VERSION }}/{{ $json.commentId }}/replies",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $env.INSTAGRAM_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.aiReply }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "2aae7d8e-bc99-494c-b60c-b1bbf628626a",
+      "name": "Finalize Reply Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6020, -120],
+      "parameters": {
+        "jsCode": "const upstream = $json;\nconst hadError = upstream.error !== undefined;\nconst status = hadError ? 'reply_failed' : 'ok';\n\nreturn [{\n  json: {\n    ...upstream,\n    status,\n    executionTimeMs: Date.now() - (upstream.startTime || Date.now())\n  }\n}];"
+      }
+    },
+    {
+      "id": "078b08bb-3f05-4405-8766-217c9e12e19f",
+      "name": "Log Interaction",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [6240, 60],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "InteractionLog",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.timestamp || new Date().toISOString() }}",
+            "username": "={{ $json.username }}",
+            "comment": "={{ $json.commentText }}",
+            "classification": "={{ $json.classification ? $json.classification.type : ($json.status || 'n/a') }}",
+            "reply": "={{ $json.aiReply || '' }}",
+            "status": "={{ $json.status || 'ok' }}",
+            "aiModel": "={{ $json.aiModel || '' }}",
+            "executionTimeMs": "={{ $json.executionTimeMs || 0 }}",
+            "aiSuccess": "={{ $json.aiSuccess === true }}",
+            "replySource": "={{ $json.replySource || 'none' }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Meta Webhook - Verify (GET)": {
+      "main": [
+        [
+          {
+            "node": "Verify Token Match?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Token Match?": {
+      "main": [
+        [
+          {
+            "node": "Respond - Challenge Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Verification Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta Webhook - Events (POST)": {
+      "main": [
+        [
+          {
+            "node": "Verify Webhook Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Webhook Signature": {
+      "main": [
+        [
+          {
+            "node": "Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Respond - Event Received",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Signature Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond - Signature Rejected": {
+      "main": [
+        [
+          {
+            "node": "Reject - Invalid Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond - Event Received": {
+      "main": [
+        [
+          {
+            "node": "Extract Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Payload": {
+      "main": [
+        [
+          {
+            "node": "Normalize Comment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Comment Data": {
+      "main": [
+        [
+          {
+            "node": "Is Owner Comment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Owner Comment?": {
+      "main": [
+        [
+          {
+            "node": "Ignore - Owner Comment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Duplicate Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate Lookup": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Duplicate Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Duplicate Lookup": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Ignore - Duplicate Comment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Store Comment ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Comment ID": {
+      "main": [
+        [
+          {
+            "node": "Check Recent Reply History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recent Reply History": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Cooldown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Cooldown": {
+      "main": [
+        [
+          {
+            "node": "Recently Replied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recently Replied?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Cooldown Skip Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deterministic Profanity Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic Profanity Filter": {
+      "main": [
+        [
+          {
+            "node": "Is Profane?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Profane?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Profanity Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deterministic Spam Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic Spam Filter": {
+      "main": [
+        [
+          {
+            "node": "Is Spam?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Spam?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Spam Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deterministic Keyword Detector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic Keyword Detector": {
+      "main": [
+        [
+          {
+            "node": "Is Keyword Match?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Keyword Match?": {
+      "main": [
+        [
+          {
+            "node": "Build Keyword Reply + DM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Keyword Reply + DM": {
+      "main": [
+        [
+          {
+            "node": "Send Instagram DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Comment": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Build Reply Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reply Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Reply": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Reply": {
+      "main": [
+        [
+          {
+            "node": "Wait - Throttle Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Instagram DM": {
+      "main": [
+        [
+          {
+            "node": "Wait - Throttle Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait - Throttle Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply Publicly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Publicly": {
+      "main": [
+        [
+          {
+            "node": "Finalize Reply Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Reply Status": {
+      "main": [
+        [
+          {
+            "node": "Log Interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Cooldown Skip Log": {
+      "main": [
+        [
+          {
+            "node": "Log Interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Profanity Log": {
+      "main": [
+        [
+          {
+            "node": "Log Interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Spam Log": {
+      "main": [
+        [
+          {
+            "node": "Log Interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
